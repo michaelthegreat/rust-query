@@ -1,9 +1,15 @@
 [package]
 name = "rust-query"
 version = "0.1.0"
+authors = ["Michael Quintero <michaelq.quintero@gmail.com>"]
+license = "MIT"
+repository = "https://github.com/michaelthegreat/rust-query"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
 juniper = "0.15.11"
+juniper_hyper = "0.1.0"
+r2d2 = "^0.8.10"
+r2d2_postgres = "^0.18.1"
