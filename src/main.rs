@@ -4,6 +4,9 @@
 use std::thread;
 use r2d2_postgres::{postgres::NoTls, PostgresConnectionManager};
 use r2d2::Pool;
+use std::env;
+use dotenv::dotenv;
+use std::format;
 
 // #[derive(GraphQLEnum)]
 // enum Episode {
@@ -83,22 +86,36 @@ use r2d2::Pool;
 // type Schema = juniper::RootNode<'static, Query, Mutation>;
 
 fn main() {
+    // Retrieve the value of the "PWD" environment variable
+    dotenv().ok();
+    let POSTGRES_DB_HOST = env::var("POSTGRES_DB_HOST").expect("Error: Working directory environment variable POSTGRES_DB_HOST not found");
+    let POSTGRES_DB_PORT = env::var("POSTGRES_DB_PORT").expect("Error: Working directory environment variable POSTGRES_DB_PORT not found");
+    let POSTGRES_DB_NAME = env::var("POSTGRES_DB_NAME").expect("Error: Working directory environment variable POSTGRES_DB_NAME not found");
+    let POSTGRES_DB_USER = env::var("POSTGRES_DB_USER").expect("Error: Working directory environment variable POSTGRES_DB_USER not found");
+    let POSTGRES_DB_PASSWORD = env::var("POSTGRES_DB_PASSWORD").expect("Error: Working directory environment variable POSTGRES_DB_PASSWORD not found");
 
+    let connectionString = format!("postgres://{}:{}@{}:{}/{}",
+        POSTGRES_DB_USER,
+        POSTGRES_DB_PASSWORD,
+        POSTGRES_DB_HOST,
+        POSTGRES_DB_PORT,
+        POSTGRES_DB_NAME);
+    println!("{}", connectionString);
 
-    let manager = PostgresConnectionManager::new(
-        "host=localhost user=postgres".parse().unwrap(),
-        NoTls,
-    );
-    let pool = r2d2::Pool::new(manager).unwrap();
+    // Print the value associated with the "PWD" key
+    // let manager = PostgresConnectionManager::new(
+    //     "host=localhost user=postgres".parse().unwrap(),
+    //     NoTls,
+    // );
+    // let pool = r2d2::Pool::new(manager).unwrap();
     
-    for i in 0..1i32 {
-        let pool = pool.clone();
-        let query = r#"SELECT "listingId", "title", "description", "price", "inStock", "length", "width", "height", "imageUrl", "deleted", "createdOn" FROM "public"."listing" AS "ListingModel" WHERE "ListingModel"."deleted" = false;"#;
-        thread::spawn(move || {
-            let mut client = pool.get().unwrap();
-            client.execute(query, &[&i]).unwrap();
-        });
-    }
-    
+    // for i in 0..1i32 {
+    //     let pool = pool.clone();
+    //     let query = r#"SELECT "listingId", "title", "description", "price", "inStock", "length", "width", "height", "imageUrl", "deleted", "createdOn" FROM "public"."listing" AS "ListingModel" WHERE "ListingModel"."deleted" = false;"#;
+    //     thread::spawn(move || {
+    //         let mut client = pool.get().unwrap();
+    //         client.execute(query, &[&i]).unwrap();
+    //     });
+    // }
     
 }
