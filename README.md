@@ -1,4 +1,4 @@
-This file provides the code foran aws lambda that
+This file provides the code for an aws lambda that
 performs a single rust postgresql query and returns the
 results in JSON
 
