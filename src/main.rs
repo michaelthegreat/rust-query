@@ -1,6 +1,10 @@
 use lambda_http::{run, service_fn, Body, Error, Request, RequestExt, Response};
 use std::env;
 use dotenv::dotenv;
+use std::thread;
+use r2d2::Pool;
+use r2d2_postgres::{postgres::NoTls, PostgresConnectionManager};
+use rust_decimal::prelude::*;
 /* get secret example in java\\\\]]]]]]]]]]]]\
 
 // Use this code snippet in your app.
@@ -42,13 +46,22 @@ public static void getSecret() {
 
     // Your code goes here.
 } */
+struct Listing {
+    listing_id: i32,
+    title: String,
+    description: String,
+    price: i64,
+    in_stock: i32,
+    length: Decimal,
+    width: Decimal,
+    image_url: String,
+    deleted: bool,
+}
 
-
-/// - https://github.com/awslabs/aws-lambda-rust-runtime/tree/main/examples
 async fn function_handler(event: Request) -> Result<Response<Body>, Error> {
+
     // important todo: on a lambda this seems risky to do, but I'm not sure how to get the connection string otherwise.
     dotenv().ok();
-    
     let postgres_db_host = env::var("POSTGRES_DB_HOST").expect("Error: Working directory environment variable POSTGRES_DB_HOST not found");
     let postgres_db_port = env::var("POSTGRES_DB_PORT").expect("Error: Working directory environment variable POSTGRES_DB_PORT not found");
     let postgres_db_name = env::var("POSTGRES_DB_NAME").expect("Error: Working directory environment variable POSTGRES_DB_NAME not found");
@@ -62,20 +75,45 @@ async fn function_handler(event: Request) -> Result<Response<Body>, Error> {
     postgres_db_port,
     postgres_db_name);
 
-    // Extract some useful information from the request
-    let who = event
-        .query_string_parameters_ref()
-        .and_then(|params| params.first("name"))
-        .unwrap_or("world");
-    let message = format!("Hello {who}, this is an AWS Lambda HTTP request");
+    let manager = PostgresConnectionManager::new(
+        connection_string.parse().unwrap(),
+        NoTls,
+    );
+    const QUERY: &str = r#"SELECT "listingId", "title", "description", "price", "inStock", "length", "width", "height", "imageUrl", "deleted", "createdOn" FROM "public"."listing" AS "ListingModel" WHERE "ListingModel"."deleted" = false;"#;
+    let pool = r2d2::Pool::new(manager).unwrap();
+    
+    let query_result =  thread::spawn( move || {
+        let mut client = pool.get().unwrap();
+        let result = client.query(QUERY, &[]).unwrap();
 
-    // Return something that implements IntoResponse.
-    // It will be serialized to the right response event automatically by the runtime
+        let mut json_response = String::new();
+        json_response.push_str("{ \"listings\": [");
+
+        for i in 0..result.len() {
+            let listing = Listing {
+                listing_id: result.get(i).unwrap().get(0),
+                title: result.get(i).unwrap().get(1),
+                description: result.get(i).unwrap().get(2),
+                price: result.get(i).unwrap().get(3),
+                in_stock: result.get(i).unwrap().get(4),
+                length: result.get(i).unwrap().get(5),
+                width: result.get(i).unwrap().get(6),
+                image_url: result.get(i).unwrap().get(8),
+                deleted: result.get(i).unwrap().get(9),
+            };
+            json_response.push_str(&format!("{{ \"listing_id\": {}, \"title\": {}, \"description\": {}, \"price\": {}, \"in_stock\": {}, \"length\": {}, \"width\": {}, \"image_url\": {}, \"deleted\": {} }},", listing.listing_id, listing.title, listing.description, listing.price, listing.in_stock, listing.length, listing.width, listing.image_url, listing.deleted));
+        }
+        json_response.pop();
+        json_response.push_str("]}");
+        json_response
+        
+    });
+
+    let response = query_result.join().unwrap();
     let resp = Response::builder()
         .status(200)
-        .header("content-type", "text/html")
-        // .body(message.into())
-        .body(connection_string.into())
+        .header("content-type", "application/json")
+        .body(response.into())
         .map_err(Box::new)?;
     Ok(resp)
 }

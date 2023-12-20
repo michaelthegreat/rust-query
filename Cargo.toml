@@ -22,5 +22,7 @@ tracing = { version = "0.1", features = ["log"] }
 tracing-subscriber = { version = "0.3", default-features = false, features = ["fmt"] }
 dotenv = "0.15.0"
 aws-config = { version = "1.1.1", features = ["behavior-version-latest"] }
-
+r2d2_postgres = "^0.18.1"
+r2d2 = "^0.8.10"
 aws-sdk-secretsmanager = "1.7.0"
+rust_decimal = { version = "1.32", features = ["db-postgres"] }
