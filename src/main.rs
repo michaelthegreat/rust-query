@@ -5,6 +5,9 @@ use std::thread;
 use r2d2::Pool;
 use r2d2_postgres::{postgres::NoTls, PostgresConnectionManager};
 use rust_decimal::prelude::*;
+use aws_parameters_and_secrets_lambda::Manager;
+use serde::Deserialize;
+
 /* get secret example in java\\\\]]]]]]]]]]]]\
 
 // Use this code snippet in your app.
@@ -58,10 +61,23 @@ struct Listing {
     deleted: bool,
 }
 
-async fn function_handler(event: Request) -> Result<Response<Body>, Error> {
+#[derive(Deserialize)]
+struct BackendServer {
+    api_key: String,
+}
 
+
+async fn function_handler(event: Request) -> Result<Response<Body>, Error> {
     // important todo: on a lambda this seems risky to do, but I'm not sure how to get the connection string otherwise.
     dotenv().ok();
+    let secret_name = env::var("SECRET_NAME").expect("Error: Working directory environment variable SECRET_NAME not found");
+    let manager = Manager::default();
+    let secret = manager.get_secret(secret_name);
+    // println!("secret: {:?}", secret);
+    // let secret_value: BackendServer = secret.get_typed().await?;
+    // assert_eq!("", secret_value.api_key);
+
+
     let postgres_db_host = env::var("POSTGRES_DB_HOST").expect("Error: Working directory environment variable POSTGRES_DB_HOST not found");
     let postgres_db_port = env::var("POSTGRES_DB_PORT").expect("Error: Working directory environment variable POSTGRES_DB_PORT not found");
     let postgres_db_name = env::var("POSTGRES_DB_NAME").expect("Error: Working directory environment variable POSTGRES_DB_NAME not found");
@@ -101,7 +117,7 @@ async fn function_handler(event: Request) -> Result<Response<Body>, Error> {
                 image_url: result.get(i).unwrap().get(8),
                 deleted: result.get(i).unwrap().get(9),
             };
-            json_response.push_str(&format!("{{ \"listing_id\": {}, \"title\": {}, \"description\": {}, \"price\": {}, \"in_stock\": {}, \"length\": {}, \"width\": {}, \"image_url\": {}, \"deleted\": {} }},", listing.listing_id, listing.title, listing.description, listing.price, listing.in_stock, listing.length, listing.width, listing.image_url, listing.deleted));
+            json_response.push_str(&format!("{{ \"listingId\": {}, \"title\": \"{}\", \"description\": \"{}\", \"price\": {}, \"inStock\": {}, \"length\": {}, \"width\": {}, \"imageUrl\": \"{}\", \"deleted\": {} }},", listing.listing_id, listing.title, listing.description, listing.price, listing.in_stock, listing.length, listing.width, listing.image_url, listing.deleted));
         }
         json_response.pop();
         json_response.push_str("]}");
@@ -109,6 +125,7 @@ async fn function_handler(event: Request) -> Result<Response<Body>, Error> {
         
     });
 
+    // let response = "hello";
     let response = query_result.join().unwrap();
     let resp = Response::builder()
         .status(200)
