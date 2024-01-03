@@ -8,47 +8,6 @@ use rust_decimal::prelude::*;
 use aws_parameters_and_secrets_lambda::Manager;
 use serde::Deserialize;
 
-/* get secret example in java\\\\]]]]]]]]]]]]\
-
-// Use this code snippet in your app.
-// If you need more information about configurations or implementing the sample
-// code, visit the AWS docs:
-// https://docs.aws.amazon.com/sdk-for-java/latest/developer-guide/home.html
-
-// Make sure to import the following packages in your code
-// import software.amazon.awssdk.regions.Region;
-// import software.amazon.awssdk.services.secretsmanager.SecretsManagerClient;
-// import software.amazon.awssdk.services.secretsmanager.model.GetSecretValueRequest;
-// import software.amazon.awssdk.services.secretsmanager.model.GetSecretValueResponse;	
-
-public static void getSecret() {
-
-    String secretName = "michaels-art-site-db";
-    Region region = Region.of("us-east-1");
-
-    // Create a Secrets Manager client
-    SecretsManagerClient client = SecretsManagerClient.builder()
-            .region(region)
-            .build();
-
-    GetSecretValueRequest getSecretValueRequest = GetSecretValueRequest.builder()
-            .secretId(secretName)
-            .build();
-
-    GetSecretValueResponse getSecretValueResponse;
-
-    try {
-        getSecretValueResponse = client.getSecretValue(getSecretValueRequest);
-    } catch (Exception e) {
-        // For a list of exceptions thrown, see
-        // https://docs.aws.amazon.com/secretsmanager/latest/apireference/API_GetSecretValue.html
-        throw e;
-    }
-
-    String secret = getSecretValueResponse.secretString();
-
-    // Your code goes here.
-} */
 struct Listing {
     listing_id: i32,
     title: String,
@@ -61,23 +20,42 @@ struct Listing {
     deleted: bool,
 }
 
-#[derive(Deserialize)]
-struct BackendServer {
-    api_key: String,
+mod connect {
+    pub fn do_aws_secrets_manager_connection (secret_name: &str) {
+        let manager = super::Manager::default();
+        let secret = manager.get_secret(secret_name);
+        
+        println!("secret: {:?}", secret);
+        println!("TODO do_aws_secrets_manager_connection");
+    } 
+
+    pub fn do_env_connection () {
+        println!("TODO do_env_connection");
+    }
 }
 
+enum ConnectionType {
+    AwsSecretsManager,
+    Env,
+}
 
 async fn function_handler(event: Request) -> Result<Response<Body>, Error> {
     // important todo: on a lambda this seems risky to do, but I'm not sure how to get the connection string otherwise.
     dotenv().ok();
-    let secret_name = env::var("SECRET_NAME").expect("Error: Working directory environment variable SECRET_NAME not found");
-    let manager = Manager::default();
-    let secret = manager.get_secret(secret_name);
-    // println!("secret: {:?}", secret);
-    // let secret_value: BackendServer = secret.get_typed().await?;
     // assert_eq!("", secret_value.api_key);
+    let connection_type = ConnectionType::AwsSecretsManager;
+    match connection_type {
+        ConnectionType::AwsSecretsManager => {
+            let secret_name = env::var("SECRET_NAME").expect("Error: Working directory environment variable SECRET_NAME not found");
+            connect::do_aws_secrets_manager_connection(&secret_name);
+        },
+        ConnectionType::Env => {
+            connect::do_env_connection();
+        }
+    }
 
 
+    
     let postgres_db_host = env::var("POSTGRES_DB_HOST").expect("Error: Working directory environment variable POSTGRES_DB_HOST not found");
     let postgres_db_port = env::var("POSTGRES_DB_PORT").expect("Error: Working directory environment variable POSTGRES_DB_PORT not found");
     let postgres_db_name = env::var("POSTGRES_DB_NAME").expect("Error: Working directory environment variable POSTGRES_DB_NAME not found");
@@ -125,8 +103,10 @@ async fn function_handler(event: Request) -> Result<Response<Body>, Error> {
         
     });
 
-    // let response = "hello";
+
     let response = query_result.join().unwrap();
+    // let response = "hello";
+
     let resp = Response::builder()
         .status(200)
         .header("content-type", "application/json")
