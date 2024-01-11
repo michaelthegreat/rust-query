@@ -20,42 +20,18 @@ struct Listing {
     deleted: bool,
 }
 
-mod connect {
-    pub fn do_aws_secrets_manager_connection (secret_name: &str) {
-        let manager = super::Manager::default();
-        let secret = manager.get_secret(secret_name);
-        
-        println!("secret: {:?}", secret);
-        println!("TODO do_aws_secrets_manager_connection");
-    } 
-
-    pub fn do_env_connection () {
-        println!("TODO do_env_connection");
-    }
+#[derive(Deserialize)]
+struct BackendServer {
+    api_key: String,
 }
 
-enum ConnectionType {
-    AwsSecretsManager,
-    Env,
-}
 
 async fn function_handler(event: Request) -> Result<Response<Body>, Error> {
-    // important todo: on a lambda this seems risky to do, but I'm not sure how to get the connection string otherwise.
     dotenv().ok();
-    // assert_eq!("", secret_value.api_key);
-    let connection_type = ConnectionType::AwsSecretsManager;
-    match connection_type {
-        ConnectionType::AwsSecretsManager => {
-            let secret_name = env::var("SECRET_NAME").expect("Error: Working directory environment variable SECRET_NAME not found");
-            connect::do_aws_secrets_manager_connection(&secret_name);
-        },
-        ConnectionType::Env => {
-            connect::do_env_connection();
-        }
-    }
+    let secret_name = env::var("SECRET_NAME").expect("Error: Working directory environment variable SECRET_NAME not found");
+    let manager = Manager::default();
+    let secret = manager.get_secret(secret_name);
 
-
-    
     let postgres_db_host = env::var("POSTGRES_DB_HOST").expect("Error: Working directory environment variable POSTGRES_DB_HOST not found");
     let postgres_db_port = env::var("POSTGRES_DB_PORT").expect("Error: Working directory environment variable POSTGRES_DB_PORT not found");
     let postgres_db_name = env::var("POSTGRES_DB_NAME").expect("Error: Working directory environment variable POSTGRES_DB_NAME not found");
@@ -103,10 +79,7 @@ async fn function_handler(event: Request) -> Result<Response<Body>, Error> {
         
     });
 
-
     let response = query_result.join().unwrap();
-    // let response = "hello";
-
     let resp = Response::builder()
         .status(200)
         .header("content-type", "application/json")
