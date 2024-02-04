@@ -1,12 +1,10 @@
+#![allow(clippy::result_large_err)]
 use lambda_http::{run, service_fn, Body, Error, Request, RequestExt, Response};
-use std::env;
-use dotenv::dotenv;
 use std::thread;
 use r2d2::Pool;
 use r2d2_postgres::{postgres::NoTls, PostgresConnectionManager};
 use rust_decimal::prelude::*;
-use aws_parameters_and_secrets_lambda::Manager;
-use serde::Deserialize;
+mod connect;
 
 struct Listing {
     listing_id: i32,
@@ -20,66 +18,63 @@ struct Listing {
     deleted: bool,
 }
 
-#[derive(Deserialize)]
-struct BackendServer {
-    api_key: String,
-}
-
 
 async fn function_handler(event: Request) -> Result<Response<Body>, Error> {
-    dotenv().ok();
-    let secret_name = env::var("SECRET_NAME").expect("Error: Working directory environment variable SECRET_NAME not found");
-    let manager = Manager::default();
-    let secret = manager.get_secret(secret_name);
-
-    let postgres_db_host = env::var("POSTGRES_DB_HOST").expect("Error: Working directory environment variable POSTGRES_DB_HOST not found");
-    let postgres_db_port = env::var("POSTGRES_DB_PORT").expect("Error: Working directory environment variable POSTGRES_DB_PORT not found");
-    let postgres_db_name = env::var("POSTGRES_DB_NAME").expect("Error: Working directory environment variable POSTGRES_DB_NAME not found");
-    let postgres_db_user = env::var("POSTGRES_DB_USER").expect("Error: Working directory environment variable POSTGRES_DB_USER not found");
-    let postgres_db_password = env::var("POSTGRES_DB_PASSWORD").expect("Error: Working directory environment variable POSTGRES_DB_PASSWORD not found");
-    
-    let connection_string = format!("postgres://{}:{}@{}:{}/{}",
-    postgres_db_user,
-    postgres_db_password,
-    postgres_db_host,
-    postgres_db_port,
-    postgres_db_name);
-
-    let manager = PostgresConnectionManager::new(
-        connection_string.parse().unwrap(),
-        NoTls,
-    );
-    const QUERY: &str = r#"SELECT "listingId", "title", "description", "price", "inStock", "length", "width", "height", "imageUrl", "deleted", "createdOn" FROM "public"."listing" AS "ListingModel" WHERE "ListingModel"."deleted" = false;"#;
-    let pool = r2d2::Pool::new(manager).unwrap();
-    
-    let query_result =  thread::spawn( move || {
-        let mut client = pool.get().unwrap();
-        let result = client.query(QUERY, &[]).unwrap();
-
-        let mut json_response = String::new();
-        json_response.push_str("{ \"listings\": [");
-
-        for i in 0..result.len() {
-            let listing = Listing {
-                listing_id: result.get(i).unwrap().get(0),
-                title: result.get(i).unwrap().get(1),
-                description: result.get(i).unwrap().get(2),
-                price: result.get(i).unwrap().get(3),
-                in_stock: result.get(i).unwrap().get(4),
-                length: result.get(i).unwrap().get(5),
-                width: result.get(i).unwrap().get(6),
-                image_url: result.get(i).unwrap().get(8),
-                deleted: result.get(i).unwrap().get(9),
-            };
-            json_response.push_str(&format!("{{ \"listingId\": {}, \"title\": \"{}\", \"description\": \"{}\", \"price\": {}, \"inStock\": {}, \"length\": {}, \"width\": {}, \"imageUrl\": \"{}\", \"deleted\": {} }},", listing.listing_id, listing.title, listing.description, listing.price, listing.in_stock, listing.length, listing.width, listing.image_url, listing.deleted));
-        }
-        json_response.pop();
-        json_response.push_str("]}");
-        json_response
+    let connection = connect::getConnection().await;
+    let result = match connection {
+        Ok(connection) => {
+            let connection_string = format!("postgres://{}:{}@{}:{}/{}",
+            connection.username,
+            connection.password,
+            connection.host,
+            connection.port,
+            connection.database);
+            let manager = PostgresConnectionManager::new(
+                connection_string.parse().unwrap(),
+                NoTls,
+            );
+            const QUERY: &str = r#"SELECT "listingId", "title", "description", "price", "inStock", "length", "width", "height", "imageUrl", "deleted", "createdOn" FROM "public"."listing" AS "ListingModel" WHERE "ListingModel"."deleted" = false;"#;
+            let pool = r2d2::Pool::new(manager).unwrap();
+            
+            let query_result =  thread::spawn( move || {
+                let mut client = pool.get().unwrap();
+                let result = client.query(QUERY, &[]).unwrap();
         
-    });
+                let mut json_response = String::new();
+                json_response.push_str("{ \"listings\": [");
+        
+                for i in 0..result.len() {
+                    let listing = Listing {
+                        listing_id: result.get(i).unwrap().get(0),
+                        title: result.get(i).unwrap().get(1),
+                        description: result.get(i).unwrap().get(2),
+                        price: result.get(i).unwrap().get(3),
+                        in_stock: result.get(i).unwrap().get(4),
+                        length: result.get(i).unwrap().get(5),
+                        width: result.get(i).unwrap().get(6),
+                        image_url: result.get(i).unwrap().get(8),
+                        deleted: result.get(i).unwrap().get(9),
+                    };
+                    json_response.push_str(&format!("{{ \"listingId\": {}, \"title\": \"{}\", \"description\": \"{}\", \"price\": {}, \"inStock\": {}, \"length\": {}, \"width\": {}, \"imageUrl\": \"{}\", \"deleted\": {} }},", listing.listing_id, listing.title, listing.description, listing.price, listing.in_stock, listing.length, listing.width, listing.image_url, listing.deleted));
+                }
+                json_response.pop();
+                json_response.push_str("]}");
+                println!("json response {:?}", json_response);
 
-    let response = query_result.join().unwrap();
+                json_response
+                
+            });
+            query_result
+        },
+        Err(e) => {
+            // return the formatted error
+            panic!("Error: {:?}", e);
+        }
+    };
+
+
+    let response = result.join().unwrap();
+
     let resp = Response::builder()
         .status(200)
         .header("content-type", "application/json")
