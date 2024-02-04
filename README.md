@@ -20,3 +20,9 @@ cargo lambda build
 
 cargo lambda deploy --s3-bucket bucket-name
 
+
+get around wsl issue with cargo lambda
+(for some reason it cant find ziglang unless you run this.
+It doesnt even reinstall but it fixes the path somehow)
+eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
+brew install cargo-lambda
