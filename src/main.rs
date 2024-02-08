@@ -20,6 +20,13 @@ struct Listing {
 
 
 async fn function_handler(event: Request) -> Result<Response<Body>, Error> {
+    let id = event
+    .query_string_parameters_ref()
+    .and_then(|params| params.first("id"))
+    .unwrap_or("");
+    if id != "" && !id.parse::<i32>().is_ok() {
+        panic!("Error: The id is not a number");
+    }
     let connection = connect::getConnection().await;
     let result = match connection {
         Ok(connection) => {
@@ -33,16 +40,18 @@ async fn function_handler(event: Request) -> Result<Response<Body>, Error> {
                 connection_string.parse().unwrap(),
                 NoTls,
             );
-            const QUERY: &str = r#"SELECT "listingId", "title", "description", "price", "inStock", "length", "width", "height", "imageUrl", "deleted", "createdOn" FROM "public"."listing" AS "ListingModel" WHERE "ListingModel"."deleted" = false;"#;
+            let QUERY: String = match id {
+                "" => r#"SELECT "listingId", "title", "description", "price", "inStock", "length", "width", "height", "imageUrl", "deleted", "createdOn" FROM "public"."listing" AS "ListingModel" WHERE "ListingModel"."deleted" = false;"#.to_string(),
+                _ => format!(r#"SELECT "listingId", "title", "description", "price", "inStock", "length", "width", "height", "imageUrl", "deleted", "createdOn" FROM "public"."listing" AS "ListingModel" WHERE "ListingModel"."deleted" = false AND "ListingModel"."listingId" = {id};"#)
+            };
             let pool = r2d2::Pool::new(manager).unwrap();
             
             let query_result =  thread::spawn( move || {
                 let mut client = pool.get().unwrap();
-                let result = client.query(QUERY, &[]).unwrap();
-        
+                let result = client.query(&QUERY, &[]).unwrap();
+                
                 let mut json_response = String::new();
                 json_response.push_str("{ \"listings\": [");
-        
                 for i in 0..result.len() {
                     let listing = Listing {
                         listing_id: result.get(i).unwrap().get(0),
@@ -57,9 +66,10 @@ async fn function_handler(event: Request) -> Result<Response<Body>, Error> {
                     };
                     json_response.push_str(&format!("{{ \"listingId\": {}, \"title\": \"{}\", \"description\": \"{}\", \"price\": {}, \"inStock\": {}, \"length\": {}, \"width\": {}, \"imageUrl\": \"{}\", \"deleted\": {} }},", listing.listing_id, listing.title, listing.description, listing.price, listing.in_stock, listing.length, listing.width, listing.image_url, listing.deleted));
                 }
-                json_response.pop();
+                if result.len() > 0 {
+                    json_response.pop();
+                }
                 json_response.push_str("]}");
-                println!("json response {:?}", json_response);
 
                 json_response
                 
