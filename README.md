@@ -20,6 +20,10 @@ cargo lambda build
 
 cargo lambda deploy --s3-bucket bucket-name
 
+If it can be made more generic and serialize the json at the end in an automated way I think it would be useful . Like, if it took any sql query as input and just figured out the types. Let me know if you know how to do this :)
+
+
+
 
 get around wsl issue with cargo lambda
 (for some reason it cant find ziglang unless you run this.
