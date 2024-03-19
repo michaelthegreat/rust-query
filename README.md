@@ -20,7 +20,7 @@ cargo lambda build
 
 cargo lambda deploy --s3-bucket bucket-name
 
-If it can be made more generic and serialize the json at the end in an automated way I think it would be useful . Like, if it took any sql query as input and just figured out the types on its own I think it would have great power to help developers get a sql query out of a lambda quickly. Let me know if you know tips how to do this :)
+If it can be made more generic and serialize the json at the end in an automated way I think it would be more useful . Like, if it took any sql query as input and just figured out the types on its own I think it would have great power to help developers get a sql query out of a lambda quickly. Let me know if you know tips how to do this :)
 
 
 
