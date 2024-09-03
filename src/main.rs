@@ -18,7 +18,6 @@ struct Listing {
     deleted: bool,
 }
 
-
 async fn function_handler(event: Request) -> Result<Response<Body>, Error> {
     let id = event
     .query_string_parameters_ref()
@@ -27,6 +26,16 @@ async fn function_handler(event: Request) -> Result<Response<Body>, Error> {
     if id != "" && !id.parse::<i32>().is_ok() {
         panic!("Error: The id is not a number");
     }
+
+    let siteId = event
+    .query_string_parameters_ref()
+    .and_then(|params| params.first("siteId"))
+    .unwrap_or("");
+
+    if siteId != "" && !siteId.parse::<i32>().is_ok() {
+        panic!("Error: The siteId is not a number");
+    }
+
     let connection = connect::getConnection().await;
     let result = match connection {
         Ok(connection) => {
@@ -41,8 +50,8 @@ async fn function_handler(event: Request) -> Result<Response<Body>, Error> {
                 NoTls,
             );
             let QUERY: String = match id {
-                "" => r#"SELECT "listingId", "title", "description", "price", "inStock", "length", "width", "height", "imageUrl", "deleted", "createdOn" FROM "public"."listing" AS "ListingModel" WHERE "ListingModel"."deleted" = false;"#.to_string(),
-                _ => format!(r#"SELECT "listingId", "title", "description", "price", "inStock", "length", "width", "height", "imageUrl", "deleted", "createdOn" FROM "public"."listing" AS "ListingModel" WHERE "ListingModel"."deleted" = false AND "ListingModel"."listingId" = {id};"#)
+                "" => r#"SELECT "listingId", "title", "description", "price", "inStock", "length", "width", "height", "imageUrl", "deleted", "createdOn" FROM "public"."listing" AS "ListingModel" WHERE "ListingModel"."deleted" = false AND "ListingModel"."siteId" = {siteId};"#.to_string(),
+                _ => format!(r#"SELECT "listingId", "title", "description", "price", "inStock", "length", "width", "height", "imageUrl", "deleted", "createdOn" FROM "public"."listing" AS "ListingModel" WHERE "ListingModel"."deleted" = false  AND "ListingModel"."siteId" = {siteId} AND "ListingModel"."listingId" = {id};"#)
             };
             let pool = r2d2::Pool::new(manager).unwrap();
             
