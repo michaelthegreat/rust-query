@@ -27,9 +27,18 @@ async fn function_handler(event: Request) -> Result<Response<Body>, Error> {
     if id != "" && !id.parse::<i32>().is_ok() {
         panic!("Error: The id is not a number");
     }
+
+    let siteId = event
+        .query_string_parameters_ref()
+        .and_then(|params| params.first("siteId"))
+        .and_then(|s| s.parse::<i32>().ok()) // Try parsing, if fails, return None
+        .unwrap_or(1); // Default to 1 
+
     let connection = connect::getConnection().await;
     let result = match connection {
         Ok(connection) => {
+            println!("connection ok");
+
             let connection_string = format!("postgres://{}:{}@{}:{}/{}",
             connection.username,
             connection.password,
@@ -41,8 +50,8 @@ async fn function_handler(event: Request) -> Result<Response<Body>, Error> {
                 NoTls,
             );
             let QUERY: String = match id {
-                "" => r#"SELECT "listingId", "title", "description", "price", "inStock", "length", "width", "height", "imageUrl", "deleted", "createdOn" FROM "public"."listing" AS "ListingModel" WHERE "ListingModel"."deleted" = false;"#.to_string(),
-                _ => format!(r#"SELECT "listingId", "title", "description", "price", "inStock", "length", "width", "height", "imageUrl", "deleted", "createdOn" FROM "public"."listing" AS "ListingModel" WHERE "ListingModel"."deleted" = false AND "ListingModel"."listingId" = {id};"#)
+                "" => format!(r#"SELECT "listingId", "title", "description", "price", "inStock", "length", "width", "height", "imageUrl", "deleted", "createdOn" FROM "public"."listing" AS "ListingModel" WHERE "ListingModel"."deleted" = false AND "ListingModel"."siteId" = {siteId};"#),
+                _ => format!(r#"SELECT "listingId", "title", "description", "price", "inStock", "length", "width", "height", "imageUrl", "deleted", "createdOn" FROM "public"."listing" AS "ListingModel" WHERE "ListingModel"."deleted" = false  AND "ListingModel"."siteId" = {siteId} AND "ListingModel"."listingId" = {id};"#)
             };
             let pool = r2d2::Pool::new(manager).unwrap();
             
@@ -61,7 +70,8 @@ async fn function_handler(event: Request) -> Result<Response<Body>, Error> {
                         in_stock: result.get(i).unwrap().get(4),
                         length: result.get(i).unwrap().get(5),
                         width: result.get(i).unwrap().get(6),
-                        image_url: result.get(i).unwrap().get(8),
+                        // if image url is null default to empty string
+                        image_url: result.get(i).and_then(|row| row.get(8)).unwrap_or_else(String::new),
                         deleted: result.get(i).unwrap().get(9),
                     };
                     json_response.push_str(&format!("{{ \"listingId\": {}, \"title\": \"{}\", \"description\": \"{}\", \"price\": {}, \"inStock\": {}, \"length\": {}, \"width\": {}, \"imageUrl\": \"{}\", \"deleted\": {} }},", listing.listing_id, listing.title, listing.description, listing.price, listing.in_stock, listing.length, listing.width, listing.image_url, listing.deleted));
